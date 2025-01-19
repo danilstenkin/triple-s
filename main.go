@@ -42,7 +42,15 @@ func main() {
 	fmt.Printf("Starting server on %s\n", address)
 
 	// Регистрируем обработчики
-	http.HandleFunc("/buckets/", handlers.CreateBucketHandler)
+	http.HandleFunc("/buckets/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" {
+			handlers.CreateBucketHandler(w, r)
+		} else if r.Method == "DELETE" {
+			handlers.DeleteBucketHandler(w, r)
+		} else {
+			http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// Запускаем сервер
 	err := http.ListenAndServe(address, nil)
