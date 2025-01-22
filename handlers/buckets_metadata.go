@@ -15,7 +15,7 @@ var MetadataFilePath string
 
 // Инициализация файла метаданных
 func InitializeMetadataFile(baseDir string) error {
-	MetadataFilePath = filepath.Join(baseDir, "buckets_metadata.csv")
+	MetadataFilePath = filepath.Join(baseDir, "buckets.csv")
 
 	// Проверяем, существует ли файл
 	if _, err := os.Stat(MetadataFilePath); os.IsNotExist(err) {
