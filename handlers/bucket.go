@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/csv"
 	"encoding/xml"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,8 +15,47 @@ import (
 var BaseDir string
 
 func isValidBucketName(bucketName string) bool {
-	matched, _ := regexp.MatchString(`^[a-z0-9]([a-z0-9.-]{1,61}[a-z0-9])?$`, bucketName)
-	return matched && !strings.Contains(bucketName, "..")
+	// Длина имени бакета
+	if len(bucketName) < 3 || len(bucketName) > 63 {
+		return false
+	}
+
+	// Имя бакета должно содержать только строчные буквы, цифры, точки и дефисы
+	matched, _ := regexp.MatchString(`^[a-z0-9][a-z0-9.-]*[a-z0-9]$`, bucketName)
+	if !matched {
+		return false
+	}
+
+	// Имя бакета не должно содержать две подряд точки
+	if strings.Contains(bucketName, "..") {
+		return false
+	}
+
+	// Имя бакета не должно быть похоже на IP-адрес
+	if net.ParseIP(bucketName) != nil {
+		return false
+	}
+
+	// Имя бакета не должно начинаться с запрещённых префиксов
+	disallowedPrefixes := []string{"xn--", "sthree-", "sthree-configurator", "amzn-s3-demo-"}
+	for _, prefix := range disallowedPrefixes {
+		if strings.HasPrefix(bucketName, prefix) {
+			return false
+		}
+	}
+
+	// Имя бакета не должно заканчиваться запрещёнными суффиксами
+	disallowedSuffixes := []string{"-s3alias", "--ol-s3", ".mrap", "--x-s3"}
+	for _, suffix := range disallowedSuffixes {
+		if strings.HasSuffix(bucketName, suffix) {
+			return false
+		}
+	}
+
+	// Дополнительное правило: имя бакета должно быть уникальным в рамках вашего сервиса
+	// (например, проверить в файле метаданных `buckets_metadata.csv`)
+
+	return true
 }
 
 func CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
