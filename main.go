@@ -6,55 +6,63 @@ import (
 	"log"
 	"net/http"
 	"os"
+
 	"triple-s/handlers"
 )
 
-// Функция для проверки и создания директории
 func ensureDir(dir string) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			log.Fatalf("Не удалось создать директорию %s: %v", dir, err)
 		}
 	}
 }
 
 func main() {
-	// Флаги
 	port := flag.Int("port", 8080, "Port number for server")
 	dir := flag.String("dir", "./data", "Directory for storing buckets")
-	help := flag.Bool("help", false, "Show usage information")
 	flag.Parse()
 
-	// Если вызываем --help
-	if *help {
-		fmt.Println("Simple Storage Service.\n\nUsage:\n    triple-s [-port <N>] [-dir <S>]\n    triple-s --help\n\nOptions:\n- --help     Show this screen.\n- --port N   Port number\n- --dir S    Path to the directory")
-		return
-	}
-
-	// Устанавливаем корневую директорию в обработчиках
+	ensureDir(*dir)
 	handlers.BaseDir = *dir
 
-	// Проверяем и создаём директорию
-	ensureDir(*dir)
+	// Инициализируем файл метаданных
+	if err := handlers.InitializeMetadataFile(*dir); err != nil {
+		log.Fatalf("Ошибка инициализации файла метаданных: %v", err)
+	}
 
-	// Формируем адрес для сервера
 	address := fmt.Sprintf(":%d", *port)
-	fmt.Printf("Starting server on %s\n", address)
+	fmt.Printf("Сервер запущен на %s\n", address)
 
-	// Регистрируем обработчики
-	http.HandleFunc("/buckets/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "PUT" {
-			handlers.CreateBucketHandler(w, r)
-		} else if r.Method == "DELETE" {
-			handlers.DeleteBucketHandler(w, r)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		pathSegments := handlers.ParseURLPath(r.URL.Path)
+
+		if len(pathSegments) == 1 {
+			switch r.Method {
+			case "PUT":
+				handlers.CreateBucketHandler(w, r)
+			case "DELETE":
+				handlers.DeleteBucketHandler(w, r)
+			case "GET":
+				handlers.ListBucketsHandler(w, r)
+			default:
+				handlers.WriteXMLError(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
+			}
+		} else if len(pathSegments) >= 2 {
+			switch r.Method {
+			case "PUT":
+				handlers.UploadObjectHandler(w, r)
+			case "DELETE":
+				handlers.DeleteObjectHandler(w, r)
+			case "GET":
+				handlers.GetObjectHandler(w, r)
+			default:
+				handlers.WriteXMLError(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
+			}
 		} else {
-			http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
+			handlers.WriteXMLError(w, http.StatusBadRequest, "InvalidPath", "Неверный путь")
 		}
 	})
 
-	// Запускаем сервер
-	err := http.ListenAndServe(address, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
+	log.Fatal(http.ListenAndServe(address, nil))
 }
