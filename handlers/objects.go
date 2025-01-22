@@ -13,14 +13,14 @@ import (
 // Обработчик для загрузки объектов
 func UploadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
-		http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
+		WriteXMLResponse(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
 		return
 	}
 
 	// Извлекаем имя бакета и объекта из пути
 	pathSegments := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 	if len(pathSegments) < 2 {
-		http.Error(w, "Неверный путь. Ожидалось /{bucketName}/{objectName}", http.StatusBadRequest)
+		WriteXMLResponse(w, http.StatusInternalServerError, "UndefindedRoute", "Неверный путь ")
 		return
 	}
 
@@ -30,7 +30,7 @@ func UploadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// Проверяем существование бакета
 	bucketDir := filepath.Join(BaseDir, bucketName)
 	if _, err := os.Stat(bucketDir); os.IsNotExist(err) {
-		http.Error(w, "Бакет не найден", http.StatusNotFound)
+		WriteXMLResponse(w, http.StatusNotFound, "BucketIsNotExist", "Бакет не найден")
 		return
 	}
 
@@ -39,14 +39,14 @@ func UploadObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Создаём директорию для вложенных объектов, если нужно
 	if err := os.MkdirAll(filepath.Dir(objectPath), 0o755); err != nil {
-		http.Error(w, "Ошибка создания директорий для объекта", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "ErrorDir", "Ошибка создания директорий для объекта")
 		return
 	}
 
 	// Создаём или перезаписываем объект
 	file, err := os.Create(objectPath)
 	if err != nil {
-		http.Error(w, "Ошибка создания объекта", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "CouldntCreate", "Ошибка создания объекта")
 		return
 	}
 	defer file.Close()
@@ -54,7 +54,7 @@ func UploadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// Копируем данные из тела запроса в файл
 	written, err := io.Copy(file, r.Body)
 	if err != nil {
-		http.Error(w, "Ошибка записи данных в объект", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "CouldntWrite", "Ошибка записи данных в объект")
 		return
 	}
 
@@ -67,18 +67,17 @@ func UploadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// Обновляем файл object_metadata.csv
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	if err := AddObjectToMetadata(bucketName, objectName, contentType, written, timestamp); err != nil {
-		http.Error(w, "Ошибка обновления метаданных объекта", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "InternalServerError", "Ошибка обновления метаданных объекта")
 		return
 	}
 
 	// Обновляем статус бакета на Active
 	if err := UpdateBucketStatus(bucketName); err != nil {
-		http.Error(w, "Ошибка обновления статуса бакета", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "InternalServerError", "Ошибка обновления статуса бакета")
 		return
 	}
 
-	// Возвращаем успешный ответ
-	w.WriteHeader(http.StatusCreated)
+	WriteXMLResponse(w, 201, "Success", "Успешно создан")
 	fmt.Fprintf(w, "Объект '%s' успешно создан в бакете '%s'", objectName, bucketName)
 }
 
@@ -118,24 +117,22 @@ func DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// Проверяем существование объекта
 	if _, err := os.Stat(objectPath); os.IsNotExist(err) {
 		WriteXMLResponse(w, http.StatusNotFound, "Object", "")
-		http.Error(w, "Объект не найден", http.StatusNotFound)
 		return
 	}
 
 	// Удаляем объект
 	if err := os.Remove(objectPath); err != nil {
-		http.Error(w, "Ошибка удаления объекта", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "CouldntDelete", "Ошибка удаления объекта")
 		return
 	}
 
 	// Удаляем запись об объекте из метаданных
 	if err := DeleteObjectFromMetadata(bucketName, objectName); err != nil {
-		http.Error(w, "Ошибка удаления записи из файла метаданных", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "CouldntDelete", "Ошибка удаления записи из файла метаданных")
 		return
 	}
 
-	// Возвращаем успешный ответ
-	w.WriteHeader(http.StatusNoContent)
+	WriteXMLResponse(w, http.StatusNoContent, "Deleted", "Deleted")
 }
 
 func getFileSize(path string) int64 {
@@ -149,14 +146,14 @@ func getFileSize(path string) int64 {
 // Обработчик для получения объекта
 func GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
+		WriteXMLResponse(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
 		return
 	}
 
 	// Извлекаем имя бакета и объекта из пути
 	pathSegments := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 	if len(pathSegments) < 2 {
-		http.Error(w, "Неверный путь. Ожидалось /{bucketName}/{objectName}", http.StatusBadRequest)
+		WriteXMLResponse(w, http.StatusBadRequest, "RouteError", "Неверный путь. Ожидалось /{bucketName}/{objectName}")
 		return
 	}
 
@@ -166,7 +163,7 @@ func GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// Проверяем существование бакета
 	bucketDir := filepath.Join(BaseDir, bucketName)
 	if _, err := os.Stat(bucketDir); os.IsNotExist(err) {
-		http.Error(w, "Бакет не найден", http.StatusNotFound)
+		WriteXMLResponse(w, http.StatusNotFound, "BucketNotFound", "Бакет не найден")
 		return
 	}
 
@@ -176,10 +173,10 @@ func GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	// Проверяем существование объекта
 	file, err := os.Open(objectPath)
 	if os.IsNotExist(err) {
-		http.Error(w, "Объект не найден", http.StatusNotFound)
+		WriteXMLResponse(w, http.StatusNotFound, "NotFound", "Бакет не найден")
 		return
 	} else if err != nil {
-		http.Error(w, "Ошибка открытия объекта", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "CouldntOpen", "Ошибка открытия")
 		return
 	}
 	defer file.Close()
@@ -196,7 +193,7 @@ func GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Передаём содержимое файла клиенту
 	if _, err := io.Copy(w, file); err != nil {
-		http.Error(w, "Ошибка передачи объекта", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "CouldntShare", "Ошибка передачи объекта")
 		return
 	}
 }

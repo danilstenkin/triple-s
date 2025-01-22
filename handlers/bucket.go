@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/csv"
 	"encoding/xml"
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -28,13 +27,13 @@ func CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	// Извлекаем имя бакета из пути
 	bucketName := strings.TrimPrefix(r.URL.Path, "/")
 	if bucketName == "" {
-		http.Error(w, "Название бакета не указано", http.StatusBadRequest)
+		WriteXMLResponse(w, http.StatusBadRequest, "BucketnameIsNotExits", "Название бакета не указано")
 		return
 	}
 
 	// Проверяем валидность имени бакета
 	if !isValidBucketName(bucketName) {
-		http.Error(w, "Недопустимое имя бакета", http.StatusBadRequest)
+		WriteXMLResponse(w, http.StatusBadRequest, "UnvaliabaleName", "Недопустимое имя бакета")
 		return
 	}
 
@@ -49,7 +48,7 @@ func CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Создаём директорию для бакета
 	if err := os.MkdirAll(bucketDir, 0o755); err != nil {
-		http.Error(w, "Ошибка создания директории бакета", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "CouldntCreate", "Ошибка создания директории бакета")
 		return
 	}
 
@@ -57,7 +56,7 @@ func CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	objectMetadataPath := filepath.Join(bucketDir, "object_metadata.csv")
 	file, err := os.Create(objectMetadataPath)
 	if err != nil {
-		http.Error(w, "Ошибка создания файла object_metadata.csv", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusBadRequest, "CouldntCreateFile", "Ошибка создания xml файла")
 		return
 	}
 	defer file.Close()
@@ -67,44 +66,44 @@ func CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	defer writer.Flush()
 
 	if err := writer.Write([]string{"ObjectName", "Size", "ContentType", "LastModified"}); err != nil {
-		http.Error(w, "Ошибка записи заголовков в object_metadata.csv", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "CouldntWriteHeader", "Ошибка записи заголовков в object_metadata.csv")
 		return
 	}
 
 	// Добавляем метаданные бакета
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	if err := AddBucketToMetadata(bucketName, timestamp); err != nil {
-		http.Error(w, "Ошибка добавления метаданных", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "CouldntUpdateMetada", "Ошибка добавления метаданных")
 		return
 	}
 
 	// Успешный ответ
-	w.WriteHeader(http.StatusCreated)
+
 	WriteXMLResponse(w, http.StatusCreated, "Success", "'%s' Успешно создан")
 }
 
 // Обработчик для удаления бакета
 func DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "DELETE" {
-		http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
+		WriteXMLResponse(w, http.StatusMethodNotAllowed, "Not Allowed", "Метод не поддерживается")
 		return
 	}
 
 	// Извлекаем имя бакета из пути
 	bucketName := strings.TrimPrefix(r.URL.Path, "/")
 	if bucketName == "" {
-		http.Error(w, "Название бакета не указано", http.StatusBadRequest)
+		WriteXMLResponse(w, http.StatusBadRequest, "Backet name not exists", "Название бакета не указано")
 		return
 	}
 
 	// Проверяем наличие записи в buckets_metadata.csv
 	exists, err := isBucketInMetadata(bucketName)
 	if err != nil {
-		http.Error(w, "Ошибка чтения файла метаданных бакетов", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "Error of metadata", "Ошибка чтения файла метаданных бакетов")
 		return
 	}
 	if !exists {
-		http.Error(w, "Бакет не найден в метаданных, удаление запрещено", http.StatusNotFound)
+		WriteXMLResponse(w, http.StatusNotFound, "Couldn't DELETE", "Бакет не найден в метаданных, удаление запрещено")
 		return
 	}
 
@@ -113,37 +112,37 @@ func DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Проверяем существование директории
 	if _, err := os.Stat(bucketDir); os.IsNotExist(err) {
-		http.Error(w, "Бакет не найден", http.StatusNotFound)
+		WriteXMLResponse(w, http.StatusNotFound, "Not Found", "Бакет не найден")
 		return
 	}
 
 	// Проверяем, пуст ли бакет
 	entries, err := os.ReadDir(bucketDir)
 	if err != nil {
-		http.Error(w, "Ошибка чтения содержимого бакета", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "Error of reading file", "Ошибка чтения содержимого бакета")
 		return
 	}
 
 	if len(entries) > 1 || (len(entries) == 1 && entries[0].Name() != "object_metadata.csv") {
-		http.Error(w, "Бакет не пуст, удаление запрещено", http.StatusConflict)
+		WriteXMLResponse(w, http.StatusConflict, "Buscket not empty", "Бакет не пуст, удаление запрещено")
 		return
 	}
 
 	// Удаляем директорию бакета
 	if err := os.RemoveAll(bucketDir); err != nil {
-		http.Error(w, "Ошибка удаления директории бакета", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "Error of delete", "Ошибка удаления директории бакета")
 		return
 	}
 
 	// Удаляем запись из метаданных
 	if err := RemoveBucketFromMetadata(bucketName); err != nil {
-		http.Error(w, "Ошибка удаления записи из файла метаданных", http.StatusInternalServerError)
+		WriteXMLResponse(w, http.StatusInternalServerError, "Couldn't DELETE", "Ошибка удаления записи из файла метаданных")
 		return
 	}
 
 	// Возвращаем успешный ответ
-	w.WriteHeader(http.StatusNoContent)
-	fmt.Fprintf(w, "Бакет '%s' успешно удалён", bucketName)
+
+	WriteXMLResponse(w, 204, "Successful", "Бакет успешно создан !")
 }
 
 type Bucket struct {
