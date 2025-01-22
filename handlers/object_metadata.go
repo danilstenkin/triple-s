@@ -52,6 +52,29 @@ func AddObjectToMetadata(bucketName, objectName, contentType string, size int64,
 	return nil
 }
 
+func isObjectInMetadata(bucketName, objectName string) (bool, error) {
+	metadataFilePath := filepath.Join(BaseDir, bucketName, "object_metadata.csv")
+
+	file, err := os.Open(metadataFilePath)
+	if err != nil {
+		return false, fmt.Errorf("не удалось открыть файл метаданных объектов: %v", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return false, fmt.Errorf("не удалось прочитать файл метаданных объектов: %v", err)
+	}
+
+	for _, record := range records {
+		if len(record) > 0 && record[0] == objectName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // Обновление записи в object_metadata.csv
 func UpdateObjectInMetadata(bucketName, objectName, contentType string, size int64, lastModified string) error {
 	objectMetadataLock.Lock()

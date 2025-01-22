@@ -83,34 +83,41 @@ func UploadObjectHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // Обработчик для удаления объекта
+// Обработчик для удаления объекта
 func DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "DELETE" {
-		http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
+		WriteXMLResponse(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
 		return
 	}
 
 	// Извлекаем имя бакета и объекта из пути
 	pathSegments := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
 	if len(pathSegments) < 2 {
-		http.Error(w, "Неверный путь. Ожидалось /{bucketName}/{objectName}", http.StatusBadRequest)
+		WriteXMLResponse(w, http.StatusBadRequest, "RouteNotFound", "Неверный путь. Ожидалось /{bucketName}/{objectName}")
+		WriteXMLResponse(w, http.StatusBadRequest, "", "")
 		return
 	}
 
 	bucketName := pathSegments[0]
 	objectName := strings.Join(pathSegments[1:], "/")
 
-	// Проверяем существование бакета
-	bucketDir := filepath.Join(BaseDir, bucketName)
-	if _, err := os.Stat(bucketDir); os.IsNotExist(err) {
-		http.Error(w, "Бакет не найден", http.StatusNotFound)
+	// Проверяем наличие записи в object_metadata.csv
+	exists, err := isObjectInMetadata(bucketName, objectName)
+	if err != nil {
+		WriteXMLResponse(w, http.StatusMethodNotAllowed, "CouldntReadMetadata", "Ошибка чтения файла метаданных объектов")
+		return
+	}
+	if !exists {
+		WriteXMLResponse(w, http.StatusMethodNotAllowed, "CouldntReadFile", "Объект не найден в метаданных, удаление запрещено")
 		return
 	}
 
 	// Формируем путь к объекту
-	objectPath := filepath.Join(bucketDir, objectName)
+	objectPath := filepath.Join(BaseDir, bucketName, objectName)
 
 	// Проверяем существование объекта
 	if _, err := os.Stat(objectPath); os.IsNotExist(err) {
+		WriteXMLResponse(w, http.StatusNotFound, "Object", "")
 		http.Error(w, "Объект не найден", http.StatusNotFound)
 		return
 	}
@@ -123,23 +130,8 @@ func DeleteObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Удаляем запись об объекте из метаданных
 	if err := DeleteObjectFromMetadata(bucketName, objectName); err != nil {
-		http.Error(w, "Ошибка удаления записи из object_metadata.csv", http.StatusInternalServerError)
+		http.Error(w, "Ошибка удаления записи из файла метаданных", http.StatusInternalServerError)
 		return
-	}
-
-	// Проверяем, пуст ли бакет (если кроме object_metadata.csv ничего нет)
-	isEmpty, err := isBucketEmpty(bucketDir)
-	if err != nil {
-		http.Error(w, "Ошибка проверки содержимого бакета", http.StatusInternalServerError)
-		return
-	}
-
-	// Если бакет пуст, обновляем статус на Inactive
-	if isEmpty {
-		if err := UpdateBucketStatus(bucketName); err != nil {
-			http.Error(w, "Ошибка обновления статуса бакета", http.StatusInternalServerError)
-			return
-		}
 	}
 
 	// Возвращаем успешный ответ

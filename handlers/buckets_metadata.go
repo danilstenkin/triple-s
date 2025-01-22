@@ -36,6 +36,27 @@ func InitializeMetadataFile(baseDir string) error {
 	return nil
 }
 
+func isBucketInMetadata(bucketName string) (bool, error) {
+	file, err := os.Open(filepath.Join(BaseDir, "buckets_metadata.csv"))
+	if err != nil {
+		return false, fmt.Errorf("не удалось открыть файл метаданных: %v", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return false, fmt.Errorf("не удалось прочитать файл метаданных: %v", err)
+	}
+
+	for _, record := range records {
+		if len(record) > 0 && record[0] == bucketName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // Добавление записи в файл метаданных
 func AddBucketToMetadata(bucketName, creationTime string) error {
 	metadataLock.Lock()

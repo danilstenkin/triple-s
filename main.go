@@ -46,7 +46,7 @@ func main() {
 			case "GET":
 				handlers.ListBucketsHandler(w, r)
 			default:
-				handlers.WriteXMLError(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
+				handlers.WriteXMLResponse(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
 			}
 		} else if len(pathSegments) >= 2 {
 			switch r.Method {
@@ -57,10 +57,10 @@ func main() {
 			case "GET":
 				handlers.GetObjectHandler(w, r)
 			default:
-				handlers.WriteXMLError(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
+				handlers.WriteXMLResponse(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
 			}
 		} else {
-			handlers.WriteXMLError(w, http.StatusBadRequest, "InvalidPath", "Неверный путь")
+			handlers.WriteXMLResponse(w, http.StatusBadRequest, "InvalidPath", "Неверный путь")
 		}
 	})
 

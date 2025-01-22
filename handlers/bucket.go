@@ -21,7 +21,7 @@ func isValidBucketName(bucketName string) bool {
 
 func CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "PUT" {
-		http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
+		WriteXMLResponse(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
 		return
 	}
 
@@ -43,7 +43,7 @@ func CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Проверяем, существует ли уже такая директория
 	if _, err := os.Stat(bucketDir); !os.IsNotExist(err) {
-		http.Error(w, "Бакет уже существует", http.StatusConflict)
+		WriteXMLResponse(w, http.StatusConflict, "Already exists", "Бакет уже существует")
 		return
 	}
 
@@ -80,55 +80,70 @@ func CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Успешный ответ
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "Бакет '%s' успешно создан, файл object_metadata.csv добавлен", bucketName)
+	WriteXMLResponse(w, http.StatusCreated, "Success", "'%s' Успешно создан")
 }
 
+// Обработчик для удаления бакета
 func DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "DELETE" {
 		http.Error(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
 		return
 	}
 
+	// Извлекаем имя бакета из пути
 	bucketName := strings.TrimPrefix(r.URL.Path, "/")
 	if bucketName == "" {
 		http.Error(w, "Название бакета не указано", http.StatusBadRequest)
 		return
 	}
 
+	// Проверяем наличие записи в buckets_metadata.csv
+	exists, err := isBucketInMetadata(bucketName)
+	if err != nil {
+		http.Error(w, "Ошибка чтения файла метаданных бакетов", http.StatusInternalServerError)
+		return
+	}
+	if !exists {
+		http.Error(w, "Бакет не найден в метаданных, удаление запрещено", http.StatusNotFound)
+		return
+	}
+
+	// Формируем путь к директории бакета
 	bucketDir := filepath.Join(BaseDir, bucketName)
+
+	// Проверяем существование директории
 	if _, err := os.Stat(bucketDir); os.IsNotExist(err) {
 		http.Error(w, "Бакет не найден", http.StatusNotFound)
 		return
 	}
 
+	// Проверяем, пуст ли бакет
 	entries, err := os.ReadDir(bucketDir)
 	if err != nil {
 		http.Error(w, "Ошибка чтения содержимого бакета", http.StatusInternalServerError)
 		return
 	}
 
-	if len(entries[1:]) > 0 {
-		// Если бакет не пуст, обновляем его статус
-		if err := UpdateBucketStatus(bucketName); err != nil {
-			http.Error(w, "Ошибка обновления статуса бакета", http.StatusInternalServerError)
-			return
-		}
-		http.Error(w, "Бакет не пуст, статус обновлён на Active", http.StatusConflict)
+	if len(entries) > 1 || (len(entries) == 1 && entries[0].Name() != "object_metadata.csv") {
+		http.Error(w, "Бакет не пуст, удаление запрещено", http.StatusConflict)
 		return
 	}
 
-	// Если бакет пуст, удаляем его
+	// Удаляем директорию бакета
 	if err := os.RemoveAll(bucketDir); err != nil {
 		http.Error(w, "Ошибка удаления директории бакета", http.StatusInternalServerError)
 		return
 	}
 
+	// Удаляем запись из метаданных
 	if err := RemoveBucketFromMetadata(bucketName); err != nil {
-		http.Error(w, "Ошибка удаления метаданных", http.StatusInternalServerError)
+		http.Error(w, "Ошибка удаления записи из файла метаданных", http.StatusInternalServerError)
 		return
 	}
 
+	// Возвращаем успешный ответ
 	w.WriteHeader(http.StatusNoContent)
+	fmt.Fprintf(w, "Бакет '%s' успешно удалён", bucketName)
 }
 
 type Bucket struct {
@@ -142,13 +157,13 @@ type ListBucketsResponse struct {
 
 func ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		WriteXMLError(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
+		WriteXMLResponse(w, http.StatusMethodNotAllowed, "MethodNotAllowed", "Метод не поддерживается")
 		return
 	}
 
 	entries, err := os.ReadDir(BaseDir)
 	if err != nil {
-		WriteXMLError(w, http.StatusInternalServerError, "InternalError", "Ошибка чтения директории")
+		WriteXMLResponse(w, http.StatusInternalServerError, "InternalError", "Ошибка чтения директории")
 		return
 	}
 
@@ -163,6 +178,6 @@ func ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(http.StatusOK)
 	if err := xml.NewEncoder(w).Encode(response); err != nil {
-		WriteXMLError(w, http.StatusInternalServerError, "InternalError", "Ошибка формирования ответа")
+		WriteXMLResponse(w, http.StatusInternalServerError, "InternalError", "Ошибка формирования ответа")
 	}
 }
