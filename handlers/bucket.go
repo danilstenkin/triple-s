@@ -100,7 +100,7 @@ func CreateBucketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteXMLResponse(w, http.StatusCreated, "Success", "'%s' Успешно создан")
+	WriteXMLResponse(w, http.StatusCreated, "Success", "Bucket успешно создан")
 }
 
 func DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
