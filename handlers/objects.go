@@ -22,6 +22,11 @@ func UploadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.ContentLength == 0 {
+		WriteXMLResponse(w, http.StatusBadRequest, "EmptyObject", "Объект не может быть пустым")
+		return
+	}
+
 	bucketName := pathSegments[0]
 	objectName := strings.Join(pathSegments[1:], "/")
 
