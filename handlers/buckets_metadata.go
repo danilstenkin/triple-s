@@ -8,16 +8,13 @@ import (
 	"sync"
 )
 
-var metadataLock sync.Mutex // Для предотвращения гонок при записи в CSV
+var metadataLock sync.Mutex
 
-// Путь к файлу метаданных
 var MetadataFilePath string
 
-// Инициализация файла метаданных
 func InitializeMetadataFile(baseDir string) error {
 	MetadataFilePath = filepath.Join(baseDir, "buckets.csv")
 
-	// Проверяем, существует ли файл
 	if _, err := os.Stat(MetadataFilePath); os.IsNotExist(err) {
 		file, err := os.Create(MetadataFilePath)
 		if err != nil {
@@ -25,7 +22,6 @@ func InitializeMetadataFile(baseDir string) error {
 		}
 		defer file.Close()
 
-		// Записываем заголовки
 		writer := csv.NewWriter(file)
 		defer writer.Flush()
 		err = writer.Write([]string{"Name", "CreationTime", "LastModified", "Status"})
@@ -37,7 +33,7 @@ func InitializeMetadataFile(baseDir string) error {
 }
 
 func isBucketInMetadata(bucketName string) (bool, error) {
-	file, err := os.Open(filepath.Join(BaseDir, "buckets_metadata.csv"))
+	file, err := os.Open(filepath.Join(BaseDir, "buckets.csv"))
 	if err != nil {
 		return false, fmt.Errorf("не удалось открыть файл метаданных: %v", err)
 	}
@@ -57,7 +53,6 @@ func isBucketInMetadata(bucketName string) (bool, error) {
 	return false, nil
 }
 
-// Добавление записи в файл метаданных
 func AddBucketToMetadata(bucketName, creationTime string) error {
 	metadataLock.Lock()
 	defer metadataLock.Unlock()
@@ -68,7 +63,6 @@ func AddBucketToMetadata(bucketName, creationTime string) error {
 	}
 	defer file.Close()
 
-	// По умолчанию статус "Inactive", так как бакет создаётся пустым
 	status := "Inactive"
 
 	writer := csv.NewWriter(file)
@@ -102,7 +96,6 @@ func UpdateBucketStatus(bucketName string) error {
 	writer := csv.NewWriter(tempFile)
 	defer writer.Flush()
 
-	// Проверяем содержимое бакета
 	bucketDir := filepath.Join(BaseDir, bucketName)
 	entries, err := os.ReadDir(bucketDir)
 	if err != nil {
@@ -114,7 +107,6 @@ func UpdateBucketStatus(bucketName string) error {
 		status = "Active"
 	}
 
-	// Обновляем записи в метаданных
 	records, err := reader.ReadAll()
 	if err != nil {
 		return fmt.Errorf("не удалось прочитать файл метаданных: %v", err)
@@ -129,14 +121,12 @@ func UpdateBucketStatus(bucketName string) error {
 		}
 	}
 
-	// Заменяем оригинальный файл временным
 	if err := os.Rename(tempFilePath, MetadataFilePath); err != nil {
 		return fmt.Errorf("не удалось заменить файл метаданных: %v", err)
 	}
 	return nil
 }
 
-// Удаление записи из файла метаданных
 func RemoveBucketFromMetadata(bucketName string) error {
 	metadataLock.Lock()
 	defer metadataLock.Unlock()
@@ -158,7 +148,6 @@ func RemoveBucketFromMetadata(bucketName string) error {
 	writer := csv.NewWriter(tempFile)
 	defer writer.Flush()
 
-	// Копируем все записи, кроме удаляемой
 	records, err := reader.ReadAll()
 	if err != nil {
 		return fmt.Errorf("не удалось прочитать файл метаданных: %v", err)
@@ -172,7 +161,6 @@ func RemoveBucketFromMetadata(bucketName string) error {
 		}
 	}
 
-	// Заменяем оригинальный файл временным
 	if err := os.Rename(tempFilePath, MetadataFilePath); err != nil {
 		return fmt.Errorf("не удалось заменить файл метаданных: %v", err)
 	}

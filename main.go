@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-
 	"triple-s/handlers"
 )
 
@@ -26,7 +25,6 @@ func main() {
 	ensureDir(*dir)
 	handlers.BaseDir = *dir
 
-	// Инициализируем файл метаданных
 	if err := handlers.InitializeMetadataFile(*dir); err != nil {
 		log.Fatalf("Ошибка инициализации файла метаданных: %v", err)
 	}
