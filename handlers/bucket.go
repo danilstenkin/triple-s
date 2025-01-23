@@ -19,6 +19,10 @@ func isValidBucketName(bucketName string) bool {
 		return false
 	}
 
+	if strings.Contains(bucketName, ".") {
+		return false
+	}
+
 	matched, _ := regexp.MatchString(`^[a-z0-9][a-z0-9.-]*[a-z0-9]$`, bucketName)
 	if !matched {
 		return false
