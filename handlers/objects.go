@@ -34,10 +34,10 @@ func UploadObjectHandler(w http.ResponseWriter, r *http.Request) {
 		WriteXMLResponse(w, http.StatusUnsupportedMediaType, "BucketKeyShouldntHasType", "Bucket не должен содержать рассширения")
 		return
 	}
-	if strings.Contains(objectName, ".") {
-		WriteXMLResponse(w, http.StatusUnsupportedMediaType, "ObjectKeyShouldntHasType", "ObjectKey не должен содержать рассширения")
-		return
-	}
+	// if strings.Contains(objectName, ".") {
+	// 	WriteXMLResponse(w, http.StatusUnsupportedMediaType, "ObjectKeyShouldntHasType", "ObjectKey не должен содержать рассширения")
+	// 	return
+	// }
 
 	bucketDir := filepath.Join(BaseDir, bucketName)
 	if _, err := os.Stat(bucketDir); os.IsNotExist(err) {
