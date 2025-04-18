@@ -28,7 +28,11 @@ func UploadObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucketName := pathSegments[0]
-	objectName := strings.Join(pathSegments[1:], "/")
+	originalName := strings.Join(pathSegments[1:], "/")
+	ext := filepath.Ext(originalName)
+	base := strings.TrimSuffix(originalName, ext)
+	objectNameTimestamp := time.Now().Format("20060102_150405")
+	objectName := fmt.Sprintf("%s_%s%s", base, objectNameTimestamp, ext)
 
 	if strings.Contains(bucketName, ".") {
 		WriteXMLResponse(w, http.StatusUnsupportedMediaType, "BucketKeyShouldntHasType", "Bucket не должен содержать рассширения")
